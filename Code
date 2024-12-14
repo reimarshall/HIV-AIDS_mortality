@@ -1,0 +1,120 @@
+# CODE
+
+#Question: Trends in AIDS-related deaths among children and teenagers by region
+# Load the necessary libraries
+library(readxl)
+library(dplyr)
+library(tidyr)
+
+# Load the dataset
+file_path <- "HIV.xlsx"
+data <- readxl::read_excel(file_path, sheet = "Data")
+
+# Clean up the dataset
+colnames(data) <- data[1, ]  # Set proper headers
+data <- data[-1, ]           # Remove the header row
+colnames(data) <- gsub("\\s+", "_", colnames(data))  # Replace spaces with underscores
+data$Year = as.numeric(data$Year)
+
+#The fatality measure that we are going to use (Estimated number of AIDS-related deaths).
+
+# Filter necessary information
+data2 <- data %>%
+  filter(Indicator == "Estimated number of annual AIDS-related deaths") %>%
+  filter(Sex =="Both") %>%
+  select(Country_Region = `Country/Region`, Year, Age, Value)
+
+unique(data2$Age)
+unique(data2$Year)
+unique(data2$Value)
+unique(data2$Country_Region)
+
+#Transforming Value into numeric data
+data2 <- data2 %>%
+  mutate(Value = case_when(
+    Value == "<100" ~ "99",
+    Value == "<200" ~ "199",
+    Value == "<500" ~ "499",
+    TRUE ~ Value
+  )) %>%
+  mutate(Value = as.numeric(gsub(",", "", Value)))
+# View the result
+unique(data2$Value)
+
+# Subsetting the dataset for countries with declining fatality trends
+data3 <- data2 %>%
+  group_by(Country_Region, Age) %>%
+  arrange(Year) %>%
+  filter(Value[1] > Value[n()]) # Keep countries where fatalities have decreased over the years
+
+# Separating data by age groups
+children <- data3 %>% filter(Age == "Age 0-14")
+adolescents <- data3 %>% filter(Age == "Age 15-19")
+
+# Calculating annual percentage decrease for each country and age group
+children_trends <- children %>%
+  group_by(Country_Region) %>%
+  summarise(annual_decrease = (first(Value) - last(Value)) / first(Value) / n() * 100)
+
+# Merging the two datasets to compare trends
+adolescents_trends <- adolescents %>%
+  group_by(Country_Region) %>%
+  summarise(annual_decrease = (first(Value) - last(Value)) / first(Value) / n() * 100)
+
+comparison <- merge(
+  children_trends %>% rename(children_annual_decrease = annual_decrease),
+  adolescents_trends %>% rename(adolescents_annual_decrease = annual_decrease),
+  by = "Country_Region")
+
+# View the comparison
+print(comparison)
+
+##creating plots according to the information
+# Filter the dataset for the selected regions and relevant age groups
+
+selected_country <- c("Botswana", "Myanmar", "South Africa", "Thailand", "Uganda")
+filtered_data1 <- data3 %>%
+  filter(Country_Region %in% selected_country & Age %in% c("Age 0-14", "Age 15-19"))
+
+# Load ggplot2 for plotting
+library(ggplot2)
+
+# Create a trend line plot
+ggplot(filtered_data1, aes(x = Year, y = Value, color = Age, group = Age)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  facet_wrap(~ Country_Region, scales = "free_y") +  # Separate plots for each region
+  labs(
+    title = "Trend of AIDS-Related Deaths by Year (Children vs Teenagers)",
+    x = "Year",
+    y = "Number of Deaths",
+    color = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    legend.position = "bottom" )
+
+selected_regions <- c("UNICEF Reporting - Eastern Europe and Central Asia", "UNICEF Reporting - South Asia")
+filtered_data2 <- data3 %>%
+  filter(Country_Region %in% selected_regions & Age %in% c("Age 0-14", "Age 15-19"))
+
+# Load ggplot2 for plotting
+library(ggplot2)
+
+# Create a trend line plot
+ggplot(filtered_data2, aes(x = Year, y = Value, color = Age, group = Age)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  facet_wrap(~ Country_Region, scales = "free_y") +  # Separate plots for each region
+  labs(
+    title = "Trend of AIDS-Related Deaths by Year (Children vs Teenagers)",
+    x = "Year",
+    y = "Number of Deaths",
+    color = "Age Group"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    legend.position = "bottom")
+
